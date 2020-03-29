@@ -1,4 +1,4 @@
-### SimCLR pytorch copy (cifar10)
+### SimCLR copy
 
 ## Reference
 
