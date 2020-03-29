@@ -1,4 +1,4 @@
-### SimCLR copy
+# SimCLR copy
 
 ## Reference
 
