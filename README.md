@@ -1,3 +1,5 @@
+### SimCLR pytorch copy (cifar10)
+
 ## Reference
 
 https://github.com/leftthomas/SimCLR
@@ -11,3 +13,4 @@ python train_cifar10.py
 pyton test_cifar10.py
 visualize.ipynb
 
+![Feature embedding visualization](tsne.png)
