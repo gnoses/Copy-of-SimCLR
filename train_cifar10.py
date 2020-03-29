@@ -1,10 +1,8 @@
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '2'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 import pandas as pd
 import torch
 import torch.optim as optim
-
-from thop import profile, clever_format
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from torchvision import transforms
@@ -17,11 +15,8 @@ batch_size, epochs = 64, 500
 class CIFAR10Pair(CIFAR10):
     def __getitem__(self, index):
         img, target = self.data[index], self.targets[index]
-        #print(img.shape)
-        img = Image.fromarray(img[:,:,0])
+        img = Image.fromarray(img)
         
-        #exit(0)
-
         if self.transform is not None:
             pos_1 = self.transform(img)
             pos_2 = self.transform(img)
@@ -33,16 +28,18 @@ class CIFAR10Pair(CIFAR10):
 
 
 train_transform = transforms.Compose([
-    transforms.RandomResizedCrop(40),
+    transforms.RandomResizedCrop(32),
     transforms.RandomHorizontalFlip(p=0.5),
     transforms.RandomApply([transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8),
     transforms.RandomGrayscale(p=0.2),
-    transforms.ToTensor()])
-    #transforms.Normalize([0.4914, 0.4822, 0.4465], [0.2023, 0.1994, 0.2010])])
+    transforms.ToTensor(),
+    transforms.Normalize([0.4914, 0.4822, 0.4465], [0.2023, 0.1994, 0.2010])
+])
 
 test_transform = transforms.Compose([
-    transforms.ToTensor()])
-    #transforms.Normalize([0.4914, 0.4822, 0.4465], [0.2023, 0.1994, 0.2010])])
+    transforms.ToTensor(),
+    transforms.Normalize([0.4914, 0.4822, 0.4465], [0.2023, 0.1994, 0.2010])
+])
 
 train_data = CIFAR10Pair(root='data', train=True, transform=train_transform, download=True)
 train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, drop_last=True)
@@ -61,7 +58,7 @@ class Model(nn.Module):
         self.f = []
         for name, module in resnet50().named_children():
             if name == 'conv1':
-                module = nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1, bias=False)
+                module = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
             if not isinstance(module, nn.Linear) and not isinstance(module, nn.MaxPool2d):
                 self.f.append(module)
         # encoder
@@ -77,13 +74,9 @@ class Model(nn.Module):
         return F.normalize(feature, dim=-1), F.normalize(out, dim=-1)
 
 model = Model(feature_dim).cuda()
-#flops, params = profile(model, inputs=(torch.randn(1, 3, 32, 32).cuda(),))
-#flops, params = clever_format([flops, params])
-#print('# Model Params: {} FLOPs: {}'.format(params, flops))
 optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-6)
 c = len(memory_data.classes)
 results = {'train_loss': [], 'test_acc@1': [], 'test_acc@5': []}
-save_name_pre = '{}_{}_{}_{}_{}'.format(feature_dim, temperature, k, batch_size, epochs)
 if not os.path.exists('results'):
     os.mkdir('results')
 
@@ -91,12 +84,10 @@ def train(net, data_loader, train_optimizer):
     net.train()
     total_loss, total_num, train_bar = 0.0, 0, tqdm(data_loader)
     for pos_1, pos_2, target in train_bar:
-    #for pos_1, pos_2, target in train_loader:
         pos_1, pos_2 = pos_1.cuda(non_blocking=True), pos_2.cuda(non_blocking=True)
         #print('pos1:',pos_1.shape)
         feature_1, out_1 = net(pos_1)
         feature_2, out_2 = net(pos_2)
-        print(pos_1.shape)
         # [2*B, D]
         out = torch.cat([out_1, out_2], dim=0)
         sim_matrix = torch.exp(torch.mm(out, out.t().contiguous()) / temperature)
